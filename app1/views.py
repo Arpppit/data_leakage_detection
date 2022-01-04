@@ -122,6 +122,7 @@ def modelformupload(request):
                 form.save()
                 q = doc.objects.last()
                 q.author = clientid
+                q.accesslevel = designation
                 q.save()
 
             return HttpResponseRedirect('/user/userhome')
@@ -171,7 +172,7 @@ def displayfiles(request):
         designation = request.session['access']
     except:
         return HttpResponseRedirect('/')
-    q = doc.objects.filter(accesslevel__lte=designation)
+    q = doc.objects.all()
     levels = ['public', 'private', 'confidential', 'topsecret']
     context = {
         'data': q,
@@ -181,9 +182,9 @@ def displayfiles(request):
     }
     global logs
     n = random.randint(0, 100)
-    sender = Users.objects.get(username=context['username'])
-    recipient = Users.objects.get(username='john')
-    print(sender, recipient)
+    # sender = Users.objects.get(username=context['username'])
+    # recipient = Users.objects.get(username='john')
+    # print(sender, recipient)
 
     # message = "This is an simple message"
     # notify.send(sender=sender, recipient=recipient, verb='Message',
@@ -198,7 +199,7 @@ def displayfiles(request):
         if request.POST.get('filename'):
             name = request.POST.get('filename')
             out = f"documents/document-output-{n}.pdf"
-            val = modify_file(name, clientid, n)
+            val = modify_file(name, clientid, n,designation)
             q = AccessLog()
             q.filename = name
             q.accesslevel = context['designation']
@@ -215,11 +216,14 @@ def displayfiles(request):
     return render(request, "app1/user_searchDocument.html", context)
 
 
-def modify_file(filename, clientid, n):
+def modify_file(filename, clientid, n,designation):
     q = LoginDetails.objects.filter(clientid=clientid)[0]
+    s = [i for i in doc.objects.filter(document=filename)]
+    s= s[-1]
     cipher = q.cipher_text
     hash1 = q.hash_text
-
+    owner = s.author
+    designation = s.accesslevel
     # cipher embedding
     print(cipher)
     encryption_suite = AES.new(
@@ -235,6 +239,11 @@ def modify_file(filename, clientid, n):
     t = filename
     filename = 'documents\index.jpeg'
     img = cv2.imread(f'{folder}\media\{filename}')
+    owner_l = [ord(c) for c in owner]
+    img.itemset((2,3,0), owner_l[0])
+    img.itemset((3,3,0), owner_l[1])
+    img.itemset((4,3,0), owner_l[2])
+    img.itemset((9,2,0), designation)
     # print(filename)
     x = 55
     y = 10
@@ -335,6 +344,9 @@ def extraction():
         im = cv2.imread(document_location + '\detector\z-0000.ppm')
         cipher = []
         print(im.shape)
+        owner = [im[2,3,0], im[3,3,0], im[4,3,0]]
+        owner_n = ''.join(chr(c) for c in owner)
+        owner_d = im[9,2,0]
         for i in range(0, 24):
             cipher.append(im[55, i+10, 0])
             # cipher.append(im[58,i+10,0])
@@ -375,29 +387,45 @@ def extraction():
 
         flag = True
         for i in LoginDetails.objects.filter():
-            print('FromLoop', cipher_text, i.cipher_text)
+            print('FromLoop', cipher_text, i.cipher_text, i.designation, owner_d)
             if cipher_text == i.cipher_text and i.hash_text == hash:
                 culprit = i
                 print(culprit.clientid, culprit.username, culprit.hash_text)
 
                 if culprit.hash_text == hash:
-                    flag = False
-                    print("Culprit's name is: {}".format(culprit.username))
-                    q.username = culprit.username
-                    q.designation = culprit.designation
-                    q.m = hash
-                    q.mdash = culprit.hash_text
-                    q.clientid = culprit.clientid
-                    q.status = 'Yes'
-                    q.save()
+                    print('here',culprit.clientid, owner_n, owner_d, culprit.designation)
+                    if culprit.clientid != owner_n:
+                        flag = False
+                        if culprit.designation < owner_d:
+                        
+                            print("Culprit's name is: {}".format(culprit.username))
+                            q.username = culprit.username
+                            q.designation = culprit.designation
+                            q.m = hash
+                            q.mdash = culprit.hash_text
+                            q.clientid = culprit.clientid
+                            q.status = 'Leaked'
+                            q.save()
+                        else:
+                            q.status = 'Veiwed by senior'
+                            q.username = culprit.username
+                            q.designation = culprit.designation
+                            q.save()
+                            
+                    else:
+                        q.status = 'Owner'
+                        q.username = culprit.username
+                        q.designation = culprit.designation
+                        q.save()
+                        flag = False
 
         if flag:
-            print("Not detected")
+            print("Not Leaked")
             q.status = 'No'
             q.save()
         os.remove(document_location + '\detector\z-0000.ppm')
     except:
-        q.status = 'Not Leaked'
+        q.status = 'Not Accessed'
         q.save()
 
 @cache_control(no_cache=True, must_revalidate=True, no_store=True)

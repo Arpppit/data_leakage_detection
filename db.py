@@ -3,12 +3,13 @@ import sqlite3
 
 db = sqlite3.connect('db.sqlite3')
 cursor = db.cursor()
-# # cursor.execute("update login_logindetails set clientid='abc' where id = 1")
-# # cursor.execute("update login_logindetails set clientid='pqr' where id = 3")
+cursor.execute("delete from app1_document")
+#cursor.execute("update login_logindetails set username='bhupendar' where id = 1")
+#cursor.execute("update login_logindetails set username='' where id = 2")
 # # cursor.execute("update login_logindetails set clientid='xyz' where id = 2")
 # # cursor.execute("update login_logindetails set cipher_text='abc' where id = 1")
 # # cursor.execute("update login_logindetails set cipher_text='pqr' where id = 3")
-cursor.execute("ALTER TABLE app1_accesslog ADD id int")
+#cursor.execute("ALTER TABLE app1_accesslog ADD id int")
 # cursor.execute("delete from app1_detectorupload where status = 'Not Viewed'")
 db.commit() 
 
